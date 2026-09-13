@@ -49,6 +49,25 @@ The included workflow publishes on every push to `main`:
 
 No `base` path configuration is needed — all asset references are relative.
 
+#### What actually gets published
+
+The deploy does **not** upload the repository. `scripts/stage-deploy.mjs` stages a
+deliberate allowlist into `_site/` and the workflow uploads only that:
+
+```
+index.html   favicon.svg   src/css/   src/js/
+```
+
+Everything else — the CI workflow, the test harness, `screenshots/`,
+`package.json` — stays out of the published site, and the script fails the build
+if a denylisted path reaches the output or if `index.html` references a file that
+was not staged (which would otherwise be a 404 and a blank page in production).
+
+**If you add a new asset file** (a new stylesheet, module or image), add its path
+to `ALLOWLIST` in `scripts/stage-deploy.mjs`. The CI job runs the same check on
+every push and pull request, so a forgotten entry fails fast rather than
+silently breaking the live site.
+
 ## Tests
 
 ```bash

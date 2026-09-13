@@ -127,6 +127,11 @@ for (const rel of staged) {
 
 if (!staged.includes('index.html')) fail('index.html is missing from the deploy output');
 
+// The entry module is the one file whose absence would leave a page that loads
+// and then does nothing. Assert it by name rather than inferring it from the
+// reference walk below, which would pass on an empty allowlist.
+if (!staged.includes('src/js/main.js')) fail('src/js/main.js is missing from the deploy output');
+
 // A deployed page that references a file we did not stage is a 404 in
 // production and a blank screen. Assert the reverse mapping too.
 const html = await (await import('node:fs/promises')).readFile(join(OUT, 'index.html'), 'utf8');
