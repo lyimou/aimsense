@@ -32,22 +32,15 @@ jobs:
       - name: Run tests
         run: npm test
 
-      - name: Verify the site itself has no runtime dependencies
-        run: |
-          # Delegated to a script so it never depends on shell/YAML quoting.
-          # The previous inline version embedded JS in a double-quoted shell
-          # string and failed on both Node versions for that reason alone.
-          # The script also asserts that every src/js import is relative, so the
-          # grep below is a second opinion rather than the only check.
-          node scripts/check-no-runtime-deps.mjs
-
-          # Nothing under src/ may import a bare specifier (i.e. a package).
-          # Relative imports only.
-          if grep -rnE "from ['\"][^./]" src/ --include='*.js'; then
-            echo "::error::src/ imports a bare module specifier - the site must stay dependency-free"
-            exit 1
-          fi
-          echo "site is dependency-free (relative imports only)"
+      # Dependency freedom is asserted inside the test suite
+      # (scripts/test-deps.mjs), so it runs on both Node versions rather than
+      # once. It used to be a standalone step ending in a grep for bare module
+      # specifiers, and that grep was matched by ordinary PROSE: a comment in
+      # engine.js reads 'could not tell "flew past" from "stopped short"', and
+      # `from "flew past"` looks exactly like `from "lodash"` to a regex. It
+      # failed CI on both Node versions because of a sentence. The check now
+      # parses import statements, and test-deps.mjs asserts that the parser
+      # flags a real bare import while ignoring prose.
 
       - name: Check every module parses
         run: |
