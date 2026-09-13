@@ -1,0 +1,36 @@
+{
+  "name": "aimsense",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Browser-based FPS mouse sensitivity testing and recommendation. No build step, no dependencies.",
+  "type": "module",
+  "scripts": {
+    "start": "python -m http.server 8000",
+    "test": "node scripts/test-all.mjs",
+    "test:sensitivity": "node scripts/test-sensitivity.mjs",
+    "test:recommend": "node scripts/test-recommend.mjs",
+    "verify:browser": "node scripts/verify-browser.mjs http://localhost:8000",
+    "verify:e2e": "node scripts/verify-e2e.mjs http://localhost:8000",
+    "screenshots": "node scripts/capture-screenshots.mjs http://localhost:8000"
+  },
+  "keywords": [
+    "fps",
+    "aim-trainer",
+    "mouse-sensitivity",
+    "cm/360",
+    "edpi",
+    "canvas"
+  ],
+  "license": "MIT",
+  "author": "Huang For Wa (lyimou)",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/lyimou/aimsense.git"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
+}

@@ -1,0 +1,24 @@
+# Build output
+dist/
+build/
+
+# Dependencies (there are none, but be explicit)
+node_modules/
+
+# Editor / OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Local scratch
+*.log
+screenshots/*.tmp
+screenshots/*.psd
+
+# Secrets
+.env
+.env.*
+*.pem
+*.key

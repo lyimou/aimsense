@@ -1,0 +1,102 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Run tests
+        run: npm test
+
+      - name: Verify the site itself has no runtime dependencies
+        run: |
+          # The whole point of this project is that the SHIPPED site needs no
+          # build step and no third-party code. Playwright is a dev-only tool for
+          # the browser tests, so only `dependencies` and the shipped imports are
+          # checked here — not node_modules.
+          if grep -q '"dependencies"' package.json; then
+            echo "::error::package.json declares runtime dependencies"
+            exit 1
+          fi
+
+          # Nothing under src/ may import a bare specifier (i.e. a package).
+          # Relative imports only.
+          if grep -rnE "from ['\"][^./]" src/ --include='*.js'; then
+            echo "::error::src/ imports a bare module specifier - the site must stay dependency-free"
+            exit 1
+          fi
+          echo "site is dependency-free (relative imports only)"
+
+      - name: Check every module parses
+        run: |
+          fail=0
+          for f in src/js/*.js scripts/test-*.mjs; do
+            if node --check "$f" 2>/dev/null; then
+              echo "ok   $f"
+            else
+              echo "::error file=$f::syntax error"
+              fail=1
+            fi
+          done
+          exit $fail
+
+      - name: Verify no third-party network requests on load
+        run: |
+          # A CDN font or script would break offline use and leak requests.
+          if grep -nE 'https?://[^"]*\.(js|css|woff2?|ttf)' index.html src/css/styles.css; then
+            echo "::error::a third-party asset URL was found"
+            exit 1
+          fi
+          echo "no third-party assets referenced"
+
+      - name: Ensure no absolute URLs in asset references
+        run: |
+          # Relative paths are what let this deploy to /aimsense/ with no base
+          # configuration. An absolute src/href would break the subpath deploy.
+          if grep -nE '(src|href)="/(src|favicon)' index.html; then
+            echo "::error::index.html uses root-absolute asset paths"
+            exit 1
+          fi
+          echo "asset paths are relative"
+
+  deploy:
+    name: Deploy to GitHub Pages
+    needs: test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    concurrency:
+      group: pages
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          # The repository root IS the site: no build step.
+          path: .
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
