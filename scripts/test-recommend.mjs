@@ -19,6 +19,7 @@ import {
 } from '../src/js/recommend.js';
 import { REF } from '../src/js/recommend.js';
 import { GAMES, cmPer360 } from '../src/js/sensitivity.js';
+import { MESSAGES } from '../src/js/i18n-messages.js';
 
 let pass = 0;
 let fail = 0;
@@ -32,12 +33,12 @@ function ok(name, cond, detail = '') {
   }
 }
 
-const flick = (accuracy, avgReactionMs, overshootRatio) =>
-  scoreRound({ mode: 'flick', accuracy, avgReactionMs, overshootRatio });
+const flick = (accuracy, avgReactionMs, radialErrorRatio) =>
+  scoreRound({ mode: 'flick', accuracy, avgReactionMs, radialErrorRatio });
 const track = (onTargetRatio, deviationRatio) =>
   scoreRound({ mode: 'track', onTargetRatio, deviationRatio });
-const micro = (accuracy, overshootRatio) =>
-  scoreRound({ mode: 'micro', accuracy, overshootRatio });
+const micro = (accuracy, radialErrorRatio) =>
+  scoreRound({ mode: 'micro', accuracy, radialErrorRatio });
 
 /** Build a round whose score is approximately `target` for the given mode. */
 function makeRound(mode, multiplier, target) {
@@ -49,7 +50,7 @@ function makeRound(mode, multiplier, target) {
         ...common,
         accuracy: q,
         avgReactionMs: mid(REF.reactionGoodMs, REF.reactionBadMs),
-        overshootRatio: mid(REF.overshootGoodRatio, REF.overshootBadRatio),
+        radialErrorRatio: mid(REF.radialErrorGoodRatio, REF.radialErrorBadRatio),
       };
     }
     if (mode === 'track') {
@@ -62,7 +63,7 @@ function makeRound(mode, multiplier, target) {
     return {
       ...common,
       accuracy: q,
-      overshootRatio: mid(REF.overshootGoodRatio, REF.overshootBadRatio),
+      radialErrorRatio: mid(REF.radialErrorGoodRatio, REF.radialErrorBadRatio),
     };
   };
   let lo = 0;
@@ -92,11 +93,11 @@ console.log('\nrecommend.js\n' + '='.repeat(60));
   const checks = [
     ['flick: higher accuracy helps', flick(0.5, 700, 0.06) < flick(0.9, 700, 0.06)],
     ['flick: lower reaction time helps', flick(0.8, 1000, 0.06) < flick(0.8, 500, 0.06)],
-    ['flick: less overshoot helps', flick(0.8, 700, 0.09) < flick(0.8, 700, 0.03)],
+    ['flick: smaller radial error helps', flick(0.8, 700, 0.09) < flick(0.8, 700, 0.03)],
     ['track: more time on target helps', track(0.3, 0.15) < track(0.9, 0.15)],
     ['track: less deviation helps', track(0.7, 0.2) < track(0.7, 0.06)],
     ['micro: higher accuracy helps', micro(0.5, 0.06) < micro(0.9, 0.06)],
-    ['micro: less overshoot helps', micro(0.8, 0.09) < micro(0.8, 0.03)],
+    ['micro: smaller radial error helps', micro(0.8, 0.09) < micro(0.8, 0.03)],
   ];
   for (const [name, cond] of checks) ok(name, cond);
 }
@@ -104,14 +105,14 @@ console.log('\nrecommend.js\n' + '='.repeat(60));
 /* --- full dynamic range -------------------------------------------------- */
 {
   const perfect = [
-    flick(1, REF.reactionGoodMs, REF.overshootGoodRatio),
+    flick(1, REF.reactionGoodMs, REF.radialErrorGoodRatio),
     track(1, REF.deviationGoodRatio),
-    micro(1, REF.overshootGoodRatio),
+    micro(1, REF.radialErrorGoodRatio),
   ];
   const terrible = [
-    flick(0, REF.reactionBadMs, REF.overshootBadRatio),
+    flick(0, REF.reactionBadMs, REF.radialErrorBadRatio),
     track(0, REF.deviationBadRatio),
-    micro(0, REF.overshootBadRatio),
+    micro(0, REF.radialErrorBadRatio),
   ];
   ok('perfect run scores ~1.0 in every mode', perfect.every((s) => s > 0.99), perfect.map((s) => s.toFixed(3)).join(', '));
   ok('terrible run scores ~0.0 in every mode', terrible.every((s) => s < 0.01), terrible.map((s) => s.toFixed(3)).join(', '));
@@ -148,7 +149,12 @@ ok('scoreRound stays within 0..1',
   ok('identical scores -> method "flat"', rec.method === 'flat', rec.method);
   ok('identical scores -> multiplier 1', rec.multiplier === 1, String(rec.multiplier));
   ok('identical scores -> confidence "none"', rec.confidence === 'none', rec.confidence);
-  ok('flat explanation says keep current', /keep your current/i.test(rec.explanation.head), rec.explanation.head);
+  ok('flat explanation selects the "keep current" message',
+    rec.explanation.head.key === 'rec.flat', rec.explanation.head.key);
+  ok('flat explanation text says keep current',
+    /keep your current/i.test(MESSAGES.en[rec.explanation.head.key]), MESSAGES.en[rec.explanation.head.key]);
+  ok('flat explanation has a Chinese translation too',
+    Boolean(MESSAGES.zh[rec.explanation.head.key]), rec.explanation.head.key);
 }
 
 /* --- interior peak at exactly 1x ---------------------------------------- */
@@ -165,7 +171,13 @@ ok('scoreRound stays within 0..1',
   ok('interior peak -> method "parabola"', rec.method === 'parabola', rec.method);
   ok('interior peak -> high confidence', rec.confidence === 'high', rec.confidence);
   ok('interior peak -> multiplier ~1', Math.abs(rec.multiplier - 1) < 0.05, String(rec.multiplier));
-  ok('parabola explanation mentions a curve', /curve/i.test(rec.explanation.head));
+  ok('parabola explanation selects the curve message',
+    rec.explanation.head.key === 'rec.parabola', rec.explanation.head.key);
+  ok('parabola explanation text mentions a curve',
+    /curve/i.test(MESSAGES.en[rec.explanation.head.key]), MESSAGES.en[rec.explanation.head.key]);
+  ok('parabola explanation carries the multiplier as a param',
+    rec.explanation.head.params.mult === rec.multiplier,
+    `${rec.explanation.head.params.mult} vs ${rec.multiplier}`);
   ok('generated samples are not flat',
     Math.abs(rec.samples[1][1] - rec.samples[0][1]) > 0.06,
     rec.samples.map((s) => s[1].toFixed(3)).join(', '));

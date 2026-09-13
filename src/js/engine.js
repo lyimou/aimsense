@@ -12,27 +12,34 @@
  *  - every listener is torn down in destroy()
  */
 
+import { t } from './i18n.js';
+
 const ROUND_MS = 30000; // hard cap per round
 const TARGETS_PER_ROUND = 10;
+const TARGET_EXPIRY_MS = 4000; // a flick target that is never clicked expires
 
+/**
+ * Test modes.
+ *
+ * `labelKey` / `blurbKey` are i18n keys, not text: the engine drives a canvas
+ * and has no business knowing which language the page is in. The canvas labels
+ * are resolved through `t()` at draw time so they follow the toggle.
+ */
 export const MODES = {
   flick: {
     id: 'flick',
-    label: 'Flick',
-    blurb: 'Click each target as fast as you can.',
-    instructions: 'Move with your mouse, click on the target. 10 targets per round.',
+    labelKey: 'test.mode.flick',
+    instructionsKey: 'test.mode.flick.desc',
   },
   track: {
     id: 'track',
-    label: 'Track',
-    blurb: 'Hold the crosshair inside the moving target.',
-    instructions: 'Hold the mouse button and keep the crosshair on the moving target.',
+    labelKey: 'test.mode.track',
+    instructionsKey: 'test.mode.track.desc',
   },
   micro: {
     id: 'micro',
-    label: 'Micro-adjust',
-    blurb: 'Make the smallest correction that lands on target.',
-    instructions: 'A small click moves the target. Click it again to score.',
+    labelKey: 'test.mode.micro',
+    instructionsKey: 'test.mode.micro.desc',
   },
 };
 
@@ -209,7 +216,20 @@ export class TestEngine {
       hits: 0,
       misses: 0,
       reactionTimes: [],
-      overshoots: [],
+      /*
+       * One entry per resolved target: the distance in px from the crosshair to
+       * the target CENTRE at the moment the target was resolved (clicked, or
+       * expired). Plain numbers, like `reactionTimes`.
+       *
+       * This replaced an "overshoot" array that stored `max(0, d - r)`. That
+       * value is the distance to the target EDGE and carries no sign, so it
+       * could not tell "flew past" from "stopped short" — and because it was
+       * floored at zero, stopping short recorded a perfect 0 and scored full
+       * marks on precision. Radial error does not need a sign to fix that: it
+       * is distance from the centre in every direction, so over- and
+       * under-shooting cost exactly the same.
+       */
+      radialErrors: [],
       // track-mode accumulators
       deviationSum: 0,
       deviationMax: 0,
@@ -411,7 +431,7 @@ export class TestEngine {
       ctx.fillText(pauseMessage(this.pauseReason), w / 2, h / 2 - 8);
       ctx.font = '400 14px system-ui, sans-serif';
       ctx.fillStyle = '#94a3b8';
-      ctx.fillText('Click the canvas to resume', w / 2, h / 2 + 20);
+      ctx.fillText(t('test.pause.resume'), w / 2, h / 2 + 20);
       ctx.restore();
     }
   }
@@ -420,13 +440,13 @@ export class TestEngine {
 function pauseMessage(reason) {
   switch (reason) {
     case 'pointer-lock-lost':
-      return 'Paused — mouse left the test area';
+      return t('test.pause.pointerLock');
     case 'window-blur':
-      return 'Paused — window lost focus';
+      return t('test.pause.blur');
     case 'tab-hidden':
-      return 'Paused — tab was hidden';
+      return t('test.pause.hidden');
     default:
-      return 'Paused';
+      return t('test.pause.generic');
   }
 }
 
@@ -455,7 +475,6 @@ function spawnTarget(engine, radius, margin = 48) {
     spawnedAt: performance.now(),
     // closest the crosshair came to the target centre during this target's life
     closest: Infinity,
-    overshoot: 0,
   };
 }
 
@@ -481,12 +500,11 @@ function flickStrategy() {
       t.age = (t.age ?? 0) + dt;
       const d = Math.hypot(engine.crosshair.x - t.x, engine.crosshair.y - t.y);
       t.closest = Math.min(t.closest, d);
-      // Overshoot = how far past the target edge the crosshair travelled.
-      t.overshoot = Math.max(t.overshoot, Math.max(0, d - t.r));
-      if (t.age > 4000) {
-        // Target expired without a click: count as a miss.
+      if (t.age > TARGET_EXPIRY_MS) {
+        // Target expired without a click: count as a miss, measured at the
+        // closest the crosshair ever got.
         engine.round.misses++;
-        recordOvershoot(engine, t);
+        resolveTarget(engine, t, t.closest, TARGET_EXPIRY_MS);
         nextTarget(engine);
       }
     },
@@ -497,11 +515,10 @@ function flickStrategy() {
       const reaction = performance.now() - t.spawnedAt;
       if (d <= t.r) {
         engine.round.hits++;
-        engine.round.reactionTimes.push(reaction);
       } else {
         engine.round.misses++;
       }
-      recordOvershoot(engine, t);
+      resolveTarget(engine, t, d, reaction);
       nextTarget(engine);
     },
     draw(engine, ctx) {
@@ -510,9 +527,21 @@ function flickStrategy() {
   };
 }
 
-function recordOvershoot(engine, target) {
-  // Only meaningful when the crosshair actually went past the target.
-  if (Number.isFinite(target.overshoot)) engine.round.overshoots.push(target.overshoot);
+/**
+ * Record one resolved target.
+ *
+ * Both arrays get an entry for EVERY resolved target — hit or miss — because
+ * `summarize` averages them and an average that silently drops the failures
+ * misreports the round. An earlier version pushed reaction times only in the
+ * hit branch, so a player who missed slowly was scored on their fast hits and
+ * the speed term rewarded missing.
+ *
+ * @param {number} errorPx distance in px from the crosshair to the target centre
+ * @param {number} reactionMs time from spawn to resolution
+ */
+function resolveTarget(engine, target, errorPx, reactionMs) {
+  if (Number.isFinite(errorPx)) engine.round.radialErrors.push(errorPx);
+  if (Number.isFinite(reactionMs)) engine.round.reactionTimes.push(reactionMs);
 }
 
 function nextTarget(engine) {
@@ -589,7 +618,7 @@ function trackStrategy() {
         ctx.font = '500 13px system-ui, sans-serif';
         ctx.fillStyle = '#94a3b8';
         ctx.textAlign = 'left';
-        ctx.fillText(`avg deviation: ${(avg / t.r * 100).toFixed(0)}% of radius`, 16, 24);
+        ctx.fillText(t('test.avgDeviation', { pct: (avg / t.r * 100).toFixed(0) }), 16, 24);
         ctx.restore();
       }
     },
@@ -611,7 +640,6 @@ function microStrategy() {
       if (!t) return;
       const d = Math.hypot(engine.crosshair.x - t.x, engine.crosshair.y - t.y);
       t.closest = Math.min(t.closest, d);
-      t.overshoot = Math.max(t.overshoot, Math.max(0, d - t.r));
     },
     onClick(engine) {
       const t = engine.targets[0];
@@ -619,11 +647,10 @@ function microStrategy() {
       const d = Math.hypot(engine.crosshair.x - t.x, engine.crosshair.y - t.y);
       if (d <= t.r) {
         engine.round.hits++;
-        engine.round.reactionTimes.push(performance.now() - t.spawnedAt);
       } else {
         engine.round.misses++;
       }
-      recordOvershoot(engine, t);
+      resolveTarget(engine, t, d, performance.now() - t.spawnedAt);
 
       const done = engine.round.hits + engine.round.misses >= TARGETS_PER_ROUND;
       if (done) {
@@ -671,19 +698,30 @@ function drawTarget(ctx, t, color, ring = false) {
 /** Turn a raw round into the metrics the report and recommendation use. */
 export function summarize(round, strategy, width, height) {
   const attempts = round.hits + round.misses;
-  const accuracy = attempts > 0 ? round.hits / attempts : 0;
-  // Normalise overshoot by the canvas diagonal so it is resolution independent.
+  /*
+   * Accuracy is only defined where a round is a series of discrete attempts.
+   * Track mode has no misses — it accumulates hold time — so hits/hits would
+   * always read 100%. Reporting NaN is what lets the report render an em dash
+   * instead of a meaningless perfect score.
+   */
+  const accuracy = round.mode === 'track' ? NaN : attempts > 0 ? round.hits / attempts : 0;
+
+  const errors = round.radialErrors ?? [];
   const diag = Math.hypot(width, height);
-  const avgOvershoot =
-    round.overshoots.length > 0
-      ? round.overshoots.reduce((a, b) => a + b, 0) / round.overshoots.length
-      : 0;
+  const validErrors = errors.filter((e) => Number.isFinite(e));
+  const avgRadialError =
+    validErrors.length > 0 ? validErrors.reduce((a, b) => a + b, 0) / validErrors.length : 0;
+
+  const reactions = round.reactionTimes ?? [];
+  const validReactions = reactions.filter((r) => Number.isFinite(r));
   const avgReaction =
-    round.reactionTimes.length > 0
-      ? round.reactionTimes.reduce((a, b) => a + b, 0) / round.reactionTimes.length
+    validReactions.length > 0
+      ? validReactions.reduce((a, b) => a + b, 0) / validReactions.length
       : NaN;
-  const avgDeviation = round.samples > 0 ? round.deviationSum / round.samples : NaN;
-  const onTargetRatio = round.samples > 0 ? round.onTargetSamples / round.samples : NaN;
+
+  const samples = round.samples ?? 0;
+  const avgDeviation = samples > 0 ? round.deviationSum / samples : NaN;
+  const onTargetRatio = samples > 0 ? round.onTargetSamples / samples : NaN;
 
   return {
     index: round.index,
@@ -696,8 +734,11 @@ export function summarize(round, strategy, width, height) {
     misses: round.misses,
     accuracy,
     avgReactionMs: avgReaction,
-    avgOvershootPx: avgOvershoot,
-    overshootRatio: diag > 0 ? avgOvershoot / diag : 0,
+    // Mean distance from the target centre, in px and as a fraction of the
+    // canvas diagonal so the score is resolution independent.
+    avgRadialErrorPx: avgRadialError,
+    radialErrorRatio: diag > 0 ? avgRadialError / diag : 0,
+    radialErrorSamples: validErrors.length,
     avgDeviationPx: avgDeviation,
     deviationRatio: Number.isFinite(avgDeviation) && diag > 0 ? avgDeviation / diag : NaN,
     onTargetRatio,

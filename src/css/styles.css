@@ -394,6 +394,29 @@ input:invalid {
   border-color: var(--danger);
   color: #1a1010;
 }
+/*
+ * Ghost button, used for the language toggle so it sits in the nav row without
+ * competing with the nav links or the primary action.
+ */
+.btn--ghost {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--fg-muted);
+}
+.btn--ghost:hover {
+  background: var(--surface-2);
+  border-color: var(--accent);
+  color: var(--fg);
+}
+/*
+ * The toggle label is the language it switches TO, so it changes length
+ * ("中文" vs "English"). Reserve room for the longer of the two so the header
+ * layout does not shift when the label swaps.
+ */
+.lang-toggle {
+  min-width: 5.5rem;
+  justify-content: center;
+}
 
 /* ------------------------------ test stage ----------------------------- */
 
@@ -718,6 +741,14 @@ input:invalid {
   }
   .site-nav {
     gap: 14px;
+  }
+  /*
+   * The toggle is a real control, not a text link, so it must still meet the
+   * 44px minimum touch target at narrow widths where .btn--sm would shrink it.
+   */
+  .lang-toggle {
+    min-height: 44px;
+    padding-inline: 14px;
   }
 }
 

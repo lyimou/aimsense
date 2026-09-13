@@ -1,3 +1,4 @@
+import { t } from './i18n.js';
 /**
  * Minimal canvas charts.
  *
@@ -155,7 +156,7 @@ export function drawCurve(canvas, { samples, recommended, fit }) {
     ctx.setLineDash([]);
     ctx.fillStyle = SERIES.track;
     ctx.textAlign = px > w - 60 ? 'right' : 'left';
-    ctx.fillText('rec', px + (px > w - 60 ? -6 : 6), pad.t + 12);
+    ctx.fillText(t('chart.recommended'), px + (px > w - 60 ? -6 : 6), pad.t + 12);
   }
 }
 
@@ -171,7 +172,17 @@ export function drawRadar(canvas, { modeScores }) {
   const radius = Math.min(w, h) / 2 - 46;
   const modes = Object.keys(modeScores);
 
-  if (modes.length < 1 || radius <= 20) return;
+  // A radar needs at least two axes to enclose any area. With one mode every
+  // vertex lands on the same angle, so the polygon has zero area and the chart
+  // renders as literally nothing — not as an empty state. The quick test is
+  // flick-only, so this is a first-class path, not a corner case.
+  if (modes.length < 2 || radius <= 20) {
+    ctx.fillStyle = p.muted;
+    ctx.textAlign = 'center';
+    ctx.fillText(t('chart.radarNeedsTwo'), w / 2, h / 2 - 8);
+    ctx.fillText(t('chart.radarRunFull'), w / 2, h / 2 + 12);
+    return;
+  }
 
   const rings = 4;
   ctx.strokeStyle = p.grid;
@@ -242,7 +253,7 @@ export function drawReaction(canvas, { rounds }) {
   if (!usable.length) {
     ctx.fillStyle = p.muted;
     ctx.textAlign = 'center';
-    ctx.fillText('No reaction-time data (track mode does not record it)', w / 2, h / 2);
+    ctx.fillText(t('chart.reactionNone'), w / 2, h / 2);
     return;
   }
 
@@ -284,60 +295,64 @@ export function drawReaction(canvas, { rounds }) {
   });
 
   ctx.fillStyle = p.muted;
-  ctx.fillText('ms', pad.l - 8, pad.t - 2);
+  ctx.fillText(t('chart.ms'), pad.l - 8, pad.t - 2);
 }
 
 /**
- * Diverging bars: overshoot (positive, past the target) vs undershoot
- * (negative, stopped short). Two colours make the direction obvious, which a
- * single average would hide.
+ * Mean radial error per mode and sensitivity, as single-sided bars.
+ *
+ * This was a "diverging" chart labelling an upper half "past target" and a
+ * lower half "stopped short" — but the metric fed to it was `max(0, d - r)`,
+ * which can never be negative, so the lower half could not contain data and
+ * the axis advertised a domain (-maxPx) that was unreachable. Radial error is
+ * a distance from the centre in whatever direction, so it is honestly
+ * single-sided: shorter bars are better, and there is no sign to show.
  */
-export function drawOvershoot(canvas, { rounds }) {
+export function drawRadialError(canvas, { rounds }) {
   const { ctx, w, h } = prepare(canvas, 250);
   const p = palette();
   const pad = { l: 48, r: 16, t: 24, b: 38 };
   axesFrame(ctx, w, h, pad);
 
-  const usable = rounds.filter((r) => Number.isFinite(r.avgOvershootPx));
+  const usable = rounds.filter((r) => Number.isFinite(r.avgRadialErrorPx));
   if (!usable.length) {
     ctx.fillStyle = p.muted;
     ctx.textAlign = 'center';
-    ctx.fillText('No overshoot data', w / 2, h / 2);
+    ctx.fillText(t('chart.radialErrorNone'), w / 2, h / 2);
     return;
   }
 
   const mults = [...new Set(usable.map((r) => r.sensitivityMultiplier))].sort((a, b) => a - b);
   const modes = [...new Set(usable.map((r) => r.mode))];
-  const maxPx = Math.max(1, ...usable.map((r) => r.avgOvershootPx)) * 1.15;
-  const zeroY = h - pad.b - (0.5 * (h - pad.t - pad.b)); // centre line: 0 px
-  const halfH = (h - pad.t - pad.b) / 2;
+  const maxPx = Math.max(1, ...usable.map((r) => r.avgRadialErrorPx)) * 1.15;
+  const baseY = h - pad.b;
+  const plotH = h - pad.t - pad.b;
   const innerW = w - pad.l - pad.r;
   const groupW = innerW / mults.length;
   const barW = Math.min(26, (groupW - 12) / Math.max(1, modes.length));
 
+  // Baseline at 0 px. Shorter bar = crosshair closer to the target centre.
   ctx.strokeStyle = p.grid;
   ctx.beginPath();
-  ctx.moveTo(pad.l, zeroY);
-  ctx.lineTo(w - pad.r, zeroY);
+  ctx.moveTo(pad.l, baseY);
+  ctx.lineTo(w - pad.r, baseY);
   ctx.stroke();
 
   ctx.fillStyle = p.muted;
   ctx.textAlign = 'right';
-  ctx.fillText('0', pad.l - 8, zeroY + 4);
+  ctx.fillText('0', pad.l - 8, baseY + 4);
   ctx.fillText(`${Math.round(maxPx)}`, pad.l - 8, pad.t + 8);
-  ctx.fillText(`-${Math.round(maxPx)}`, pad.l - 8, h - pad.b);
 
   mults.forEach((mult, mi) => {
     const groupX = pad.l + mi * groupW + 6;
     modes.forEach((mode, si) => {
       const bars = usable.filter((r) => r.sensitivityMultiplier === mult && r.mode === mode);
       if (!bars.length) return;
-      const avg = bars.reduce((a, b) => a + b.avgOvershootPx, 0) / bars.length;
-      const barH = (avg / maxPx) * halfH;
+      const avg = bars.reduce((a, b) => a + b.avgRadialErrorPx, 0) / bars.length;
+      const barH = Math.max(1, (avg / maxPx) * plotH);
       const x = groupX + si * (barW + 3);
-      // Positive = travelled past the target; the magenta/red side.
       ctx.fillStyle = SERIES[mode] ?? SERIES.accent;
-      ctx.fillRect(x, zeroY - Math.max(0, barH), barW, Math.abs(barH));
+      ctx.fillRect(x, baseY - barH, barW, barH);
     });
     ctx.fillStyle = p.muted;
     ctx.textAlign = 'center';
@@ -346,7 +361,7 @@ export function drawOvershoot(canvas, { rounds }) {
 
   ctx.fillStyle = p.muted;
   ctx.textAlign = 'left';
-  ctx.fillText('past target ↑', pad.l + 4, pad.t - 8);
+  ctx.fillText(t('chart.radialErrorAxis'), pad.l + 4, pad.t - 8);
 }
 
 /** Average on-target ratio per mode per sensitivity, as simple bars. */
@@ -360,7 +375,7 @@ export function drawOnTarget(canvas, { rounds }) {
   if (!usable.length) {
     ctx.fillStyle = p.muted;
     ctx.textAlign = 'center';
-    ctx.fillText('Only track mode reports on-target time', w / 2, h / 2);
+    ctx.fillText(t('chart.onTargetNone'), w / 2, h / 2);
     return;
   }
 

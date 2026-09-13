@@ -16,9 +16,15 @@
  *   track  : 60% time-on-target + 40% steadiness (inverse mean deviation)
  *   micro  : 70% accuracy + 30% precision
  *
- * Overshoot enters as a penalty, not a bonus: both over- and under-shooting mean
- * the sensitivity does not match the player's motor range. The goal is
- * "arrives on target", not "stops short" or "flies past".
+ * "Precision" is the mean radial error — how far from the target centre the
+ * crosshair was when the shot was taken, or how close it got before the target
+ * expired. It is a distance, not a direction, so over- and under-shooting cost
+ * exactly the same. The goal is *arrives on target*, not "stops short" or
+ * "flies past".
+ *
+ * CALIBRATION: the reference window for radial error was originally derived
+ * from an unsigned "overshoot" metric that could not penalise undershooting at
+ * all. Those numbers were re-derived for the signed distance.
  *
  * ── From scores to a number ─────────────────────────────────────────────────
  * Three (multiplier, score) points are fitted by least squares to
@@ -47,8 +53,21 @@ export const REF = {
   reactionBadMs: 1100,
   deviationGoodRatio: 0.05,
   deviationBadRatio: 0.25,
-  overshootGoodRatio: 0.02,
-  overshootBadRatio: 0.10,
+  /*
+   * Radial error, as a fraction of the canvas diagonal.
+   *
+   * This replaced an `overshootRatio` window (0.02 .. 0.10). That metric was
+   * `max(0, distance - targetRadius)`, which is unsigned and floored at zero:
+   * a player who stopped short of every target recorded a perfect 0 and took
+   * full marks on this term, while the docs claimed both error directions were
+   * penalised. `radialErrorRatio` is unsigned in the sense that does not matter
+   * — it measures distance from the centre, so undershooting and overshooting
+   * produce the same penalty, which is what "arrives on target" means.
+   *
+   * On a 900x600 canvas the window spans roughly 3 px .. 54 px of mean error.
+   */
+  radialErrorGoodRatio: 0.005,
+  radialErrorBadRatio: 0.10,
 };
 
 const clamp01 = (v) => Math.min(1, Math.max(0, v));
@@ -87,9 +106,9 @@ export function scoreRound(metrics) {
     case 'flick': {
       const speed = lowerIsBetter(metrics.avgReactionMs, REF.reactionGoodMs, REF.reactionBadMs);
       const precision = lowerIsBetter(
-        metrics.overshootRatio,
-        REF.overshootGoodRatio,
-        REF.overshootBadRatio,
+        metrics.radialErrorRatio,
+        REF.radialErrorGoodRatio,
+        REF.radialErrorBadRatio,
       );
       return clamp01(0.7 * metrics.accuracy + 0.18 * speed + 0.12 * precision);
     }
@@ -104,9 +123,9 @@ export function scoreRound(metrics) {
     }
     case 'micro': {
       const precision = lowerIsBetter(
-        metrics.overshootRatio,
-        REF.overshootGoodRatio,
-        REF.overshootBadRatio,
+        metrics.radialErrorRatio,
+        REF.radialErrorGoodRatio,
+        REF.radialErrorBadRatio,
       );
       return clamp01(0.7 * metrics.accuracy + 0.3 * precision);
     }
@@ -221,25 +240,46 @@ export function recommend(session) {
   };
 }
 
+/**
+ * Build the explanation as translation KEYS plus raw parameters.
+ *
+ * It deliberately does not format a sentence: the wording and the number
+ * formatting both belong to the locale layer, and the scorer has no business
+ * knowing either. Returning a key also means a missing translation shows up as
+ * a visible key rather than as silently untranslated English.
+ */
 function explain({ method, confidence, samples, spread, rounded }) {
-  const list = samples.map(([m, s]) => `${m}× → ${(s * 100).toFixed(0)}/100`).join(', ');
-  const pct = `${rounded >= 1 ? '+' : ''}${Math.round((rounded - 1) * 100)}%`;
+  const pctValue = Math.round((rounded - 1) * 100);
 
-  const head = {
-    flat: `All three sensitivities scored within ${(spread * 100).toFixed(1)} points of each other (${list}), so the data does not justify a change. Keep your current setting.`,
-    parabola: `Your scores fitted a downward curve (${list}), and the peak of that curve sits at ${rounded}× your current sensitivity — about ${pct}.`,
-    edge: `Your best score was at the edge of the tested range (${list}), with the curve still rising at ${rounded}× — beyond what was tested. Lower your in-game sensitivity and run the sweep again to explore further.`,
-    'observed-best': `The curve fit was not reliable with these samples, so the recommendation is the best score actually observed (${list}) at ${rounded}×.`,
+  const headKey = {
+    flat: 'rec.flat',
+    parabola: 'rec.parabola',
+    edge: 'rec.edge',
+    'observed-best': 'rec.observedBest',
   }[method];
 
-  const caveat = {
-    high: 'Confidence: high — three distinct points with a clear peak inside the tested range.',
-    medium: 'Confidence: medium — based on fewer than three distinct sensitivities.',
-    none: 'Confidence: none — read this as "no change needed", not as a measurement.',
-    low: 'Confidence: low — the recommendation sits at or beyond the edge of what was tested.',
+  const caveatKey = {
+    high: 'rec.conf.high',
+    medium: 'rec.conf.medium',
+    none: 'rec.conf.none',
+    low: 'rec.conf.low',
   }[confidence];
 
-  return { head, caveat, summary: `${rounded}× (${pct})` };
+  /*
+   * The sample list is data, not prose: "0.5× → 64/100, 1× → 99/100, ...". Each
+   * message embeds it under `{list}`, so the comma-joined rendering is the same
+   * in both languages and the numbers keep their technical form.
+   */
+  const list = samples.map(([m, s]) => `${m}× ${(s * 100).toFixed(0)}/100`).join(', ');
+
+  return {
+    head: {
+      key: headKey,
+      params: { list, spread: (spread * 100).toFixed(1), mult: rounded, pct: pctValue, samples },
+    },
+    caveat: { key: caveatKey },
+    summary: { mult: rounded, pct: pctValue },
+  };
 }
 
 /**

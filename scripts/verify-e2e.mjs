@@ -105,7 +105,7 @@ ok('hits were recorded', m.hits >= 9, `hits=${m.hits}`);
 ok('misses were recorded', m.misses >= 1, `misses=${m.misses}`);
 ok('accuracy is a usable fraction', m.accuracy > 0.5 && m.accuracy <= 1, String(m.accuracy));
 ok('reaction time recorded', Number.isFinite(m.avgReactionMs) && m.avgReactionMs > 0, String(m.avgReactionMs));
-ok('overshoot recorded', Number.isFinite(m.avgOvershootPx), String(m.avgOvershootPx));
+ok('radial error recorded', Number.isFinite(m.avgRadialErrorPx), String(m.avgRadialErrorPx));
 
 /* ---- scoring consumes the metrics without throwing ---- */
 const scored = await page.evaluate(async (metrics) => {
@@ -118,6 +118,8 @@ ok('scoreRound accepts real metrics', Number.isFinite(scored) && scored >= 0 && 
 const reportOk = await page.evaluate(async () => {
   const { recommend, applyRecommendation } = await import('./src/js/recommend.js');
   const { GAMES, cmPer360 } = await import('./src/js/sensitivity.js');
+  const i18n = await import('./src/js/i18n.js');
+  const { MESSAGES } = await import('./src/js/i18n-messages.js');
 
   // Three multipliers with a clear interior peak.
   // Accuracy follows a genuine parabola in the multiplier so the vertex sits
@@ -128,8 +130,9 @@ const reportOk = await page.evaluate(async () => {
     sensitivityMultiplier: mult,
     accuracy: acc,
     avgReactionMs: 900 - acc * 400,
-    avgOvershootPx: 20 - acc * 12,
-    overshootRatio: 0.05 - acc * 0.03,
+    avgRadialErrorPx: 20 - acc * 12,
+    radialErrorRatio: 0.05 - acc * 0.03,
+    radialErrorSamples: 10,
     deviationRatio: 0.1 - acc * 0.06,
     onTargetRatio: acc,
     attempts: 10,
@@ -153,13 +156,29 @@ const reportOk = await page.evaluate(async () => {
     samples: rec.samples.length,
     recommendedCm: applied.recommendedCm360,
     explanation: rec.explanation.head,
+    // Resolve the key through the shipped i18n layer, inside the page, so this
+    // asserts the text that actually reaches the UI in both languages rather
+    // than just that some key exists.
+    headEn: i18n.t(rec.explanation.head.key, rec.explanation.head.params),
+    headZh: MESSAGES.zh[rec.explanation.head.key],
+    caveatEn: i18n.t(rec.explanation.caveat.key),
   };
 });
 
 ok('recommendation produced', Number.isFinite(reportOk.multiplier), JSON.stringify(reportOk.multiplier));
 ok('recommendation picked the interior peak', Math.abs(reportOk.multiplier - 1) < 0.1, String(reportOk.multiplier));
 ok('three sample points', reportOk.samples === 3, String(reportOk.samples));
-ok('explanation text generated', typeof reportOk.explanation === 'string' && reportOk.explanation.length > 20);
+ok('explanation is a key + params descriptor, not hardcoded prose',
+  Boolean(reportOk.explanation?.key) && typeof reportOk.explanation.params === 'object',
+  JSON.stringify(reportOk.explanation));
+ok('explanation renders to real English text',
+  typeof reportOk.headEn === 'string' && reportOk.headEn.length > 20 && !reportOk.headEn.includes('{'),
+  String(reportOk.headEn));
+ok('explanation has a Chinese translation',
+  typeof reportOk.headZh === 'string' && reportOk.headZh.length > 10,
+  String(reportOk.headZh));
+ok('caveat renders to real text', typeof reportOk.caveatEn === 'string' && reportOk.caveatEn.length > 10,
+  String(reportOk.caveatEn));
 ok('recommended cm/360 is finite', Number.isFinite(reportOk.recommendedCm), String(reportOk.recommendedCm));
 
 /* ---- report rendering does not throw ---- */
@@ -171,16 +190,16 @@ const rendered = await page.evaluate(async () => {
   c.height = 240;
   document.body.appendChild(c);
   const rounds = [
-    { mode: 'flick', sensitivityMultiplier: 0.5, accuracy: 0.5, avgReactionMs: 700, avgOvershootPx: 18, overshootRatio: 0.04, onTargetRatio: NaN, attempts: 10 },
-    { mode: 'flick', sensitivityMultiplier: 1, accuracy: 0.9, avgReactionMs: 500, avgOvershootPx: 8, overshootRatio: 0.02, onTargetRatio: NaN, attempts: 10 },
-    { mode: 'track', sensitivityMultiplier: 1, accuracy: 1, avgReactionMs: NaN, avgOvershootPx: 12, overshootRatio: 0.03, onTargetRatio: 0.8, attempts: 10 },
+    { mode: 'flick', sensitivityMultiplier: 0.5, accuracy: 0.5, avgReactionMs: 700, avgRadialErrorPx: 18, radialErrorRatio: 0.04, radialErrorSamples: 10, onTargetRatio: NaN, attempts: 10 },
+    { mode: 'flick', sensitivityMultiplier: 1, accuracy: 0.9, avgReactionMs: 500, avgRadialErrorPx: 8, radialErrorRatio: 0.02, radialErrorSamples: 10, onTargetRatio: NaN, attempts: 10 },
+    { mode: 'track', sensitivityMultiplier: 1, accuracy: NaN, avgReactionMs: NaN, avgRadialErrorPx: 12, radialErrorRatio: 0.03, radialErrorSamples: 10, onTargetRatio: 0.8, attempts: 10 },
   ];
   const modeScores = { flick: [{ multiplier: 0.5, score: 0.5 }, { multiplier: 1, score: 0.9 }], track: [{ multiplier: 0.5, score: 0.4 }, { multiplier: 1, score: 0.7 }] };
   try {
     charts.drawCurve(c, { samples: [[0.5, 0.5], [1, 0.9], [2, 0.6]], recommended: 1, fit: { a: -0.4, b: 0.9, c: 0.4 } });
     charts.drawRadar(c, { modeScores });
     charts.drawReaction(c, { rounds });
-    charts.drawOvershoot(c, { rounds });
+    charts.drawRadialError(c, { rounds });
     charts.drawOnTarget(c, { rounds });
     return { ok: true };
   } catch (e) {
@@ -188,6 +207,37 @@ const rendered = await page.evaluate(async () => {
   }
 });
 ok('all five chart renderers run without throwing', rendered.ok, rendered.error ?? '');
+
+/* ---- a radar with ONE mode must not render as blank ----
+ * The quick test is flick-only, so `modeScores` has a single key. Every
+ * polygon vertex then lands on the same angle, giving a zero-area shape that
+ * draws nothing at all — indistinguishable from a broken chart. It must
+ * instead state why it is empty. Detected by counting non-background pixels.
+ */
+const radarSingle = await page.evaluate(async () => {
+  const charts = await import('./src/js/charts.js');
+  const c = document.createElement('canvas');
+  c.width = 480;
+  c.height = 250;
+  document.body.appendChild(c);
+  const before = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+  const countInk = () => {
+    const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data;
+    let n = 0;
+    for (let i = 3; i < d.length; i += 4) if (d[i] > 0) n++;
+    return n;
+  };
+  const blank = countInk();
+  // Single-mode radar: must produce a message, so ink must increase.
+  charts.drawRadar(c, { modeScores: { flick: [{ multiplier: 1, score: 0.8 }] } });
+  const single = countInk();
+  void before;
+  c.remove();
+  return { blank, single };
+});
+ok('single-mode radar renders a message instead of nothing',
+  radarSingle.single > radarSingle.blank,
+  `ink ${radarSingle.blank} -> ${radarSingle.single}`);
 
 /* ---- history persistence ---- */
 const hist = await page.evaluate(async () => {

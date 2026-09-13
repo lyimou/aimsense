@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="src/css/styles.css" />
   </head>
   <body>
-    <a class="skip-link" href="#main">Skip to content</a>
+    <a class="skip-link" href="#main" data-i18n="a11y.skip">Skip to content</a>
 
     <header class="site-header">
       <div class="wrap header-inner">
@@ -21,12 +21,18 @@
           <span class="brand__mark" aria-hidden="true"></span>
           AimSense
         </a>
-        <nav class="site-nav" aria-label="Sections">
-          <a href="#setup">Setup</a>
-          <a href="#test">Test</a>
-          <a href="#report" data-nav-report hidden>Report</a>
-          <a href="#about">About</a>
-          <a href="https://github.com/lyimou/aimsense" rel="noopener noreferrer" target="_blank">GitHub</a>
+        <nav class="site-nav" aria-label="Sections" data-i18n-aria="a11y.sections">
+          <a href="#setup" data-i18n="nav.setup">Setup</a>
+          <a href="#test" data-i18n="nav.test">Test</a>
+          <a href="#report" data-nav-report hidden data-i18n="nav.report">Report</a>
+          <a href="#about" data-i18n="nav.about">About</a>
+          <a href="https://github.com/lyimou/aimsense" rel="noopener noreferrer" target="_blank" data-i18n="nav.github">GitHub</a>
+          <button
+            type="button"
+            id="lang-toggle"
+            class="btn btn--sm btn--ghost lang-toggle"
+            data-lang-toggle
+          >中文</button>
         </nav>
       </div>
     </header>
@@ -34,65 +40,65 @@
     <main id="main" class="wrap">
       <!-- ============================ HERO ============================ -->
       <section class="hero" aria-labelledby="hero-title">
-        <h1 id="hero-title">Find your sensitivity.</h1>
-        <p class="hero__lede">
+        <h1 id="hero-title" data-i18n="hero.title">Find your sensitivity.</h1>
+        <p class="hero__lede" data-i18n="hero.lede">
           Guessing at sensitivity costs you months. This measures it: three aim
           tests at three different sensitivities, scored against each other, then
           fitted to find your peak. Everything runs in your browser — nothing is
           uploaded.
         </p>
         <div class="hero__meta">
-          <span class="pill">~9 minutes</span>
-          <span class="pill">3 test modes</span>
-          <span class="pill">9 rounds</span>
-          <span class="pill">No sign-up</span>
+          <span class="pill" data-i18n="hero.pill.minutes">~9 minutes</span>
+          <span class="pill" data-i18n="hero.pill.modes">3 test modes</span>
+          <span class="pill" data-i18n="hero.pill.rounds">9 rounds</span>
+          <span class="pill" data-i18n="hero.pill.noSignup">No sign-up</span>
         </div>
       </section>
 
       <!-- ============================ SETUP =========================== -->
       <section id="setup" class="card" aria-labelledby="setup-title">
-        <h2 id="setup-title">1 · Your current settings</h2>
+        <h2 id="setup-title" data-i18n="setup.title">1 · Your current settings</h2>
         <form id="setup-form" class="grid-form" novalidate>
           <label class="field">
-            <span class="field__label">Mouse DPI</span>
+            <span class="field__label" data-i18n="setup.dpi">Mouse DPI</span>
             <input id="dpi" name="dpi" type="number" inputmode="numeric" min="50" max="32000" step="1" value="800" required />
-            <span class="field__hint">Check your mouse software or its manual.</span>
+            <span class="field__hint" data-i18n="setup.dpiHint">Check your mouse software or its manual.</span>
             <span class="field__error" data-error-for="dpi"></span>
           </label>
 
           <label class="field">
-            <span class="field__label">Game</span>
+            <span class="field__label" data-i18n="setup.game">Game</span>
             <select id="game" name="game">
               <option value="cs2">CS2</option>
               <option value="valorant">Valorant</option>
               <option value="apex">Apex Legends</option>
               <option value="overwatch">Overwatch 2</option>
-              <option value="other">Other / unknown</option>
+              <option value="other" data-i18n="setup.game.other">Other / unknown</option>
             </select>
             <span class="field__hint" id="game-hint"></span>
           </label>
 
           <label class="field">
-            <span class="field__label">In-game sensitivity <span class="muted">(optional)</span></span>
+            <span class="field__label"><span data-i18n="setup.sens">In-game sensitivity</span> <span class="muted" data-i18n="setup.sens.optional">(optional)</span></span>
             <input id="sens" name="sens" type="number" inputmode="decimal" min="0" max="100" step="any" placeholder="e.g. 2.0" />
-            <span class="field__hint">Leave blank to still get a ×multiplier recommendation.</span>
+            <span class="field__hint" data-i18n="setup.sensHint">Leave blank to still get a ×multiplier recommendation.</span>
             <span class="field__error" data-error-for="sens"></span>
           </label>
 
           <div class="field field--readout">
-            <span class="field__label">Derived</span>
+            <span class="field__label" data-i18n="setup.derived">Derived</span>
             <dl class="readout" id="readout">
-              <div><dt>cm/360</dt><dd id="out-cm">—</dd></div>
-              <div><dt>eDPI</dt><dd id="out-edpi">—</dd></div>
-              <div><dt>Band</dt><dd id="out-band">—</dd></div>
+              <div><dt data-i18n="setup.out.cm">cm/360</dt><dd id="out-cm">—</dd></div>
+              <div><dt data-i18n="setup.out.edpi">eDPI</dt><dd id="out-edpi">—</dd></div>
+              <div><dt data-i18n="setup.out.band">Band</dt><dd id="out-band">—</dd></div>
             </dl>
             <p class="field__hint" id="out-conversion"></p>
           </div>
         </form>
 
         <details class="explain">
-          <summary>How cm/360 works</summary>
-          <p>
+          <summary data-i18n="setup.howTitle">How cm/360 works</summary>
+          <p data-i18n-rich="setup.howBody">
             cm/360 is the distance you must move the mouse to turn a full circle in
             game. Unlike eDPI it is comparable between games and between DPI
             settings, so it is what this tool optimises. It is exact, not
@@ -104,10 +110,10 @@
 
       <!-- ============================ TEST ============================ -->
       <section id="test" class="card" aria-labelledby="test-title">
-        <h2 id="test-title">2 · The test</h2>
+        <h2 id="test-title" data-i18n="test.title">2 · The test</h2>
 
         <div id="test-intro">
-          <p class="muted">
+          <p class="muted" data-i18n="test.intro">
             You will play each mode at three sensitivities. Use the same mouse
             setting you normally play with — the tool changes only the in-test
             multiplier, so no re-configuring is needed between rounds.
@@ -115,40 +121,40 @@
 
           <div class="modes">
             <article class="mode">
-              <h3>Flick</h3>
-              <p>Targets appear one at a time. Click them. Measures hit rate, reaction time and how far you overshoot.</p>
+              <h3 data-i18n="test.mode.flick">Flick</h3>
+              <p data-i18n="test.mode.flick.desc">Targets appear one at a time. Click them. Measures hit rate, reaction time and how close to the centre you land.</p>
             </article>
             <article class="mode">
-              <h3>Track</h3>
-              <p>A target wanders. Hold the button and stay on it. Measures time-on-target and average deviation.</p>
+              <h3 data-i18n="test.mode.track">Track</h3>
+              <p data-i18n="test.mode.track.desc">A target wanders. Hold the button and stay on it. Measures time-on-target and average deviation.</p>
             </article>
             <article class="mode">
-              <h3>Micro-adjust</h3>
-              <p>Small, precise corrections. Measures accuracy and fine control.</p>
+              <h3 data-i18n="test.mode.micro">Micro-adjust</h3>
+              <p data-i18n="test.mode.micro.desc">Small, precise corrections. Measures accuracy and fine control.</p>
             </article>
           </div>
 
-          <div class="plan" aria-label="Test plan">
+          <div class="plan" aria-label="Test plan" data-i18n-aria="a11y.testPlan">
             <div class="plan__row">
-              <span class="plan__label">Sensitivities</span>
+              <span class="plan__label" data-i18n="test.plan.sensitivities">Sensitivities</span>
               <span class="plan__values" id="plan-multipliers">0.5× / 1.0× / 2.0×</span>
             </div>
             <div class="plan__row">
-              <span class="plan__label">Per sensitivity</span>
-              <span class="plan__values">Flick 10 targets · Track 30s · Micro 10 targets</span>
+              <span class="plan__label" data-i18n="test.plan.perSensitivity">Per sensitivity</span>
+              <span class="plan__values" data-i18n="test.plan.perSensitivityValue">Flick 10 targets · Track 30s · Micro 10 targets</span>
             </div>
           </div>
 
-          <p class="notice" id="pointer-notice" hidden>
+          <p class="notice" id="pointer-notice" hidden data-i18n="test.pointerNotice">
             This test needs a mouse. A touch device was detected — results will not
             be meaningful.
           </p>
 
           <div class="actions">
-            <button type="button" id="start-btn" class="btn btn--primary">Start full sweep</button>
-            <button type="button" id="quick-btn" class="btn">Quick test (flick only)</button>
+            <button type="button" id="start-btn" class="btn btn--primary" data-i18n="test.start">Start full sweep</button>
+            <button type="button" id="quick-btn" class="btn" data-i18n="test.quick">Quick test (flick only)</button>
           </div>
-          <p class="field__hint">
+          <p class="field__hint" data-i18n="test.hint">
             The full sweep is 9 short rounds. The quick test is 3 rounds and only
             looks at flick performance — useful for a first look, less reliable for
             a recommendation.
@@ -158,29 +164,29 @@
         <div id="test-stage" hidden>
           <div class="hud">
             <div class="hud__item">
-              <span class="hud__label">Stage</span>
+              <span class="hud__label" data-i18n="test.hud.stage">Stage</span>
               <span class="hud__value" id="hud-stage">—</span>
             </div>
             <div class="hud__item">
-              <span class="hud__label">Sensitivity</span>
+              <span class="hud__label" data-i18n="test.hud.sensitivity">Sensitivity</span>
               <span class="hud__value hud__value--accent" id="hud-mult">—</span>
             </div>
             <div class="hud__item">
-              <span class="hud__label">Round</span>
+              <span class="hud__label" data-i18n="test.hud.round">Round</span>
               <span class="hud__value" id="hud-round">—</span>
             </div>
             <div class="hud__item">
-              <span class="hud__label">Progress</span>
+              <span class="hud__label" data-i18n="test.hud.progress">Progress</span>
               <span class="hud__value" id="hud-progress">—</span>
             </div>
-            <button type="button" id="abort-btn" class="btn btn--sm">Abort</button>
+            <button type="button" id="abort-btn" class="btn btn--sm" data-i18n="test.abort">Abort</button>
           </div>
 
           <div class="bar" aria-hidden="true"><span id="round-bar"></span></div>
 
           <div class="canvas-shell">
-            <canvas id="stage" tabindex="0" aria-label="Aim test area"></canvas>
-            <p class="canvas-hint" id="canvas-hint">Click the area to lock the mouse and begin.</p>
+            <canvas id="stage" tabindex="0" aria-label="Aim test area" data-i18n-aria="a11y.aimTestArea"></canvas>
+            <p class="canvas-hint" id="canvas-hint" data-i18n="test.canvasHint">Click the area to lock the mouse and begin.</p>
           </div>
 
           <p class="muted" id="stage-status" role="status" aria-live="polite"></p>
@@ -189,74 +195,74 @@
 
       <!-- =========================== REPORT =========================== -->
       <section id="report" class="card" aria-labelledby="report-title" hidden>
-        <h2 id="report-title">3 · Your report</h2>
+        <h2 id="report-title" data-i18n="report.title">3 · Your report</h2>
 
         <div class="verdict" id="verdict">
-          <p class="verdict__label">Recommended sensitivity</p>
+          <p class="verdict__label" data-i18n="report.recommendedSensitivity">Recommended sensitivity</p>
           <p class="verdict__value"><span id="verdict-mult">—</span></p>
           <p class="verdict__sub" id="verdict-sub"></p>
         </div>
 
         <div class="compare" id="compare">
           <div class="compare__col">
-            <h3>Current</h3>
+            <h3 data-i18n="report.current">Current</h3>
             <dl class="readout readout--stack">
-              <div><dt>cm/360</dt><dd id="cur-cm">—</dd></div>
-              <div><dt>In-game sens</dt><dd id="cur-sens">—</dd></div>
-              <div><dt>eDPI</dt><dd id="cur-edpi">—</dd></div>
+              <div><dt data-i18n="setup.out.cm">cm/360</dt><dd id="cur-cm">—</dd></div>
+              <div><dt data-i18n="report.inGameSens">In-game sens</dt><dd id="cur-sens">—</dd></div>
+              <div><dt data-i18n="setup.out.edpi">eDPI</dt><dd id="cur-edpi">—</dd></div>
             </dl>
           </div>
           <div class="compare__arrow" aria-hidden="true">→</div>
           <div class="compare__col compare__col--accent">
-            <h3>Recommended</h3>
+            <h3 data-i18n="report.recommended">Recommended</h3>
             <dl class="readout readout--stack">
-              <div><dt>cm/360</dt><dd id="rec-cm">—</dd></div>
-              <div><dt>In-game sens</dt><dd id="rec-sens">—</dd></div>
-              <div><dt>eDPI</dt><dd id="rec-edpi">—</dd></div>
+              <div><dt data-i18n="setup.out.cm">cm/360</dt><dd id="rec-cm">—</dd></div>
+              <div><dt data-i18n="report.inGameSens">In-game sens</dt><dd id="rec-sens">—</dd></div>
+              <div><dt data-i18n="setup.out.edpi">eDPI</dt><dd id="rec-edpi">—</dd></div>
             </dl>
           </div>
         </div>
 
         <details class="explain" id="why" open>
-          <summary>Why this number</summary>
+          <summary data-i18n="report.why">Why this number</summary>
           <p id="why-head"></p>
           <p class="muted" id="why-caveat"></p>
         </details>
 
         <div class="charts">
           <figure class="chart">
-            <figcaption>Score vs sensitivity <span class="muted">(higher is better)</span></figcaption>
+            <figcaption><span data-i18n="report.chartCurve">Score vs sensitivity</span> <span class="muted" data-i18n="report.chartCurveSub">(higher is better)</span></figcaption>
             <canvas id="chart-curve" height="240"></canvas>
           </figure>
           <figure class="chart">
-            <figcaption>Accuracy by mode and sensitivity</figcaption>
+            <figcaption data-i18n="report.chartRadar">Accuracy by mode and sensitivity</figcaption>
             <canvas id="chart-radar" height="240"></canvas>
           </figure>
           <figure class="chart">
-            <figcaption>Reaction time per round <span class="muted">(flick / micro)</span></figcaption>
+            <figcaption><span data-i18n="report.chartReaction">Reaction time per round</span> <span class="muted" data-i18n="report.chartReactionSub">(flick / micro)</span></figcaption>
             <canvas id="chart-reaction" height="240"></canvas>
           </figure>
           <figure class="chart">
-            <figcaption>Overshoot / undershoot <span class="muted">(average px past target)</span></figcaption>
-            <canvas id="chart-overshoot" height="240"></canvas>
+            <figcaption><span data-i18n="report.chartRadialError">Accuracy</span> <span class="muted" data-i18n="report.chartRadialErrorSub">(mean distance from target centre — shorter is better)</span></figcaption>
+            <canvas id="chart-radial-error" height="240"></canvas>
           </figure>
           <figure class="chart">
-            <figcaption>Time on target <span class="muted">(track mode)</span></figcaption>
+            <figcaption><span data-i18n="report.chartOnTarget">Time on target</span> <span class="muted" data-i18n="report.chartOnTargetSub">(track mode)</span></figcaption>
             <canvas id="chart-on-target" height="240"></canvas>
           </figure>
         </div>
 
         <div class="table-wrap">
           <table class="table" id="round-table">
-            <caption class="muted">Round-by-round detail</caption>
+            <caption class="muted" data-i18n="report.tableCaption">Round-by-round detail</caption>
             <thead>
               <tr>
-                <th scope="col">Mode</th>
-                <th scope="col">Sens</th>
-                <th scope="col">Hit rate</th>
-                <th scope="col">Avg reaction</th>
-                <th scope="col">Avg overshoot</th>
-                <th scope="col">On target</th>
+                <th scope="col" data-i18n="report.col.mode">Mode</th>
+                <th scope="col" data-i18n="report.col.sens">Sens</th>
+                <th scope="col" data-i18n="report.col.hitRate">Hit rate</th>
+                <th scope="col" data-i18n="report.col.avgReaction">Avg reaction</th>
+                <th scope="col" data-i18n="report.col.meanError">Mean error</th>
+                <th scope="col" data-i18n="report.col.onTarget">On target</th>
               </tr>
             </thead>
             <tbody></tbody>
@@ -264,25 +270,25 @@
         </div>
 
         <div class="actions">
-          <button type="button" id="copy-btn" class="btn btn--primary">Copy results</button>
-          <button type="button" id="retest-btn" class="btn">Retest</button>
-          <button type="button" id="download-btn" class="btn">Download JSON</button>
+          <button type="button" id="copy-btn" class="btn btn--primary" data-i18n="report.copy">Copy results</button>
+          <button type="button" id="retest-btn" class="btn" data-i18n="report.retest">Retest</button>
+          <button type="button" id="download-btn" class="btn" data-i18n="report.download">Download JSON</button>
         </div>
 
         <details class="explain" id="history-box">
-          <summary>Saved tests on this device (<span id="history-count">0</span>)</summary>
+          <summary><span data-i18n="report.history.summary">Saved tests on this device</span> (<span id="history-count">0</span>)</summary>
           <div id="history-list"></div>
           <div class="actions">
-            <button type="button" id="clear-history" class="btn btn--danger btn--sm">Clear saved tests</button>
+            <button type="button" id="clear-history" class="btn btn--danger btn--sm" data-i18n="report.history.clear">Clear saved tests</button>
           </div>
         </details>
       </section>
 
       <!-- ============================ ABOUT =========================== -->
       <section id="about" class="card" aria-labelledby="about-title">
-        <h2 id="about-title">About</h2>
+        <h2 id="about-title" data-i18n="about.title">About</h2>
         <div class="prose">
-          <p>
+          <p data-i18n="about.p1">
             AimSense compares you against <em>yourself</em>, not against a
             population. There is no public benchmark for "good" aim, so instead it
             tests the same player at three sensitivities and fits a curve through
@@ -291,29 +297,22 @@
             else.
           </p>
           <p>
-            <strong>What the score means.</strong> Each mode produces metrics on a
-            different scale, so each is normalised to 0–1 and combined:
-            flick weights hit rate highest, then speed, then how cleanly you stop;
-            tracking is time-on-target plus steadiness; micro-adjust is accuracy
-            plus precision. Overshoot counts against you both ways — arriving short
-            and flying past are both misses.
+            <strong data-i18n="about.scoreLead">What the score means.</strong>
+            <span data-i18n="about.scoreBody">Each mode produces metrics on a different scale, so each is normalised to 0–1 and combined: flick weights hit rate highest, then speed, then how cleanly you stop; tracking is time-on-target plus steadiness; micro-adjust is accuracy plus precision. Precision is the mean distance from the target centre, so arriving short and flying past cost exactly the same.</span>
           </p>
           <p>
-            <strong>Limits, stated plainly.</strong> This measures a small sample
-            of your aim on one day. Fatigue, warm-up, mousepad and sleep all move
-            the numbers. If all three sensitivities score within a few points of
-            each other the app says so and recommends no change, because a
-            confident-sounding number from flat data would be a lie.
+            <strong data-i18n="about.limitsLead">Limits, stated plainly.</strong>
+            <span data-i18n="about.limitsBody">This measures a small sample of your aim on one day. Fatigue, warm-up, mousepad and sleep all move the numbers. If all three sensitivities score within a few points of each other the app says so and recommends no change, because a confident-sounding number from flat data would be a lie.</span>
           </p>
-          <p>
+          <p data-i18n="about.privacy">
             Nothing is uploaded. Results are stored in your browser's local storage
             and never leave the device.
           </p>
         </div>
         <p class="muted">
-          Built by
+          <span data-i18n="about.builtBy">Built by</span>
           <a href="https://github.com/lyimou" rel="noopener noreferrer" target="_blank">Huang For Wa (lyimou)</a>.
-          Source: <a href="https://github.com/lyimou/aimsense" rel="noopener noreferrer" target="_blank">github.com/lyimou/aimsense</a>.
+          <span data-i18n="about.source">Source:</span> <a href="https://github.com/lyimou/aimsense" rel="noopener noreferrer" target="_blank">github.com/lyimou/aimsense</a>.
         </p>
       </section>
     </main>
@@ -321,7 +320,7 @@
     <footer class="site-footer">
       <div class="wrap">
         <p>
-          AimSense · <span id="year"></span> ·
+          <span data-i18n="footer.by">AimSense</span> · <span id="year"></span> ·
           <a href="https://github.com/lyimou" rel="noopener noreferrer" target="_blank">github.com/lyimou</a>
         </p>
       </div>

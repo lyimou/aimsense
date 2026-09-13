@@ -82,6 +82,13 @@ jobs:
           node scripts/stage-deploy.mjs
           rm -rf _site
 
+      - name: Verify translation coverage
+        run: |
+          # A missing translation renders as the raw key and a placeholder that
+          # exists in one language but not the other silently drops data from
+          # the sentence. Neither throws, so both are asserted here.
+          node scripts/test-i18n.mjs
+
   deploy:
     name: Deploy to GitHub Pages
     needs: test

@@ -16,14 +16,47 @@ AimSense compares you against **yourself**. It runs every test at **0.5×, 1.0×
 
 | | |
 | --- | --- |
-| **Three test modes** | Flick (hit rate, reaction time, overshoot), Track (time-on-target, deviation), Micro-adjust (accuracy, precision) |
+| **Three test modes** | Flick (hit rate, reaction time, radial error), Track (time-on-target, deviation), Micro-adjust (accuracy, precision) |
 | **Sensitivity sweep** | 0.5× / 1.0× / 2.0×, scored and curve-fitted |
 | **Game-aware conversion** | cm/360 and eDPI for CS2, Valorant, Apex, Overwatch — plus cross-game equivalence |
-| **Visual report** | Score-vs-sensitivity curve, per-mode radar, reaction time, overshoot, time-on-target |
+| **Visual report** | Score-vs-sensitivity curve, per-mode radar, reaction time, radial error, time-on-target |
 | **Explained recommendation** | States the method, the numbers behind it, and the confidence level |
+| **Bilingual** | English and Traditional Chinese, switchable in the header; follows the browser on first visit, remembers an explicit choice |
 | **Local history** | Last 20 tests in `localStorage`; nothing is uploaded |
 | **Sharing** | Copy a text summary, or download the raw JSON |
 | **Robust runs** | Pointer-lock loss, window blur and tab-hide all pause instead of scoring you unfairly |
+
+### How a round is scored
+
+Each mode normalises its metrics to 0–1 and combines them:
+
+| Mode | Weighting |
+| --- | --- |
+| Flick | 70% hit rate + 18% speed + 12% precision |
+| Track | 60% time-on-target + 40% steadiness |
+| Micro-adjust | 70% accuracy + 30% precision |
+
+**Precision is the mean radial error** — how far from the target centre the
+crosshair was when the shot was taken (or how close it got before the target
+expired). It is a distance, not a direction, so stopping short and flying past
+cost exactly the same. This replaced an earlier "overshoot" metric that measured
+`max(0, distance − radius)`, which was unsigned and floored at zero: a player who
+undershot *every* target recorded a perfect zero and collected full marks on the
+12%/30% precision term, while the documentation claimed both error directions
+were penalised. See `scripts/test-metrics.mjs`.
+
+### Languages
+
+All user-visible text lives in `src/js/i18n-messages.js` — including the text
+canvas charts draw for themselves. Nothing is compiled, so adding a string means
+adding a key to both locales.
+
+Resolution order for the initial language: a saved choice, then `?lang=` in the
+URL, then the browser's language list. The URL is read but never written, so
+switching does not add history entries. `scripts/test-i18n.mjs` asserts that both
+locales carry the same key set, that `{placeholder}` sets match per key, and that
+no key is referenced without being defined (or defined without being used).
+
 
 ## Running it
 

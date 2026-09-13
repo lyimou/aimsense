@@ -9,9 +9,25 @@ import { GAMES, DEFAULT_DPI, cmPer360, edpi, sensitivityBand, convertSensitivity
 import { recommend, applyRecommendation, scoreRound, SWEEP_MULTIPLIERS } from './recommend.js';
 import { fullPlan, quickPlan, runPlan, totalRounds } from './session.js';
 import { loadHistory, saveEntry, clearHistory, makeId } from './history.js';
-import { drawCurve, drawRadar, drawReaction, drawOvershoot, drawOnTarget } from './charts.js';
+import { drawCurve, drawRadar, drawReaction, drawRadialError, drawOnTarget } from './charts.js';
+import { t, apply as applyI18n, toggleLocale, onLocaleChange, locale } from './i18n.js';
 
 const $ = (id) => document.getElementById(id);
+
+/** Translate a { key, params } descriptor produced by the scorer. */
+const tr = (descriptor) => (descriptor ? t(descriptor.key, descriptor.params) : '');
+
+/**
+ * Locale-aware metric labels.
+ *
+ * `GAMES` in sensitivity.js carries the yaw constants and a canonical English
+ * label; the translation layer owns the display name. Game names are brands and
+ * are identical in both languages, but going through `t()` keeps one code path
+ * instead of a special case.
+ */
+const gameLabel = (key) => t(`game.${key}`);
+const modeLabel = (mode) => t(`test.mode.${mode}`);
+const planLabel = (kind) => t(kind === 'quick' ? 'test.plan.quick' : 'test.plan.full');
 
 const state = {
   settings: { dpi: DEFAULT_DPI, game: 'cs2', sensitivity: 0 },
@@ -40,10 +56,10 @@ function readSettings() {
 function validate(settings) {
   const errors = {};
   if (!Number.isFinite(settings.dpi) || settings.dpi < 50 || settings.dpi > 32000) {
-    errors.dpi = 'Enter a DPI between 50 and 32000.';
+    errors.dpi = t('err.dpi');
   }
   if (settings.sensitivity !== 0 && (!Number.isFinite(settings.sensitivity) || settings.sensitivity <= 0)) {
-    errors.sens = 'Sensitivity must be a positive number, or left blank.';
+    errors.sens = t('err.sens');
   }
   return errors;
 }
@@ -67,20 +83,19 @@ function updateReadout() {
     const cm = cmPer360(settings.dpi, settings.sensitivity, game.yaw);
     $('out-cm').textContent = `${fmt(cm, 2)} cm`;
     $('out-edpi').textContent = fmt(edpi(settings.dpi, settings.sensitivity), 0);
-    $('out-band').textContent = sensitivityBand(cm).label;
-    $('out-conversion').textContent = `Yaw constant ${game.yaw}°/count for ${game.label}.`;
+    $('out-band').textContent = t(`band.${sensitivityBand(cm).key}`);
+    $('out-conversion').textContent = t('setup.conversion', {
+      yaw: game.yaw,
+      game: gameLabel(settings.game),
+    });
   } else {
     $('out-cm').textContent = '—';
     $('out-edpi').textContent = '—';
     $('out-band').textContent = '—';
-    $('out-conversion').textContent = settings.sensitivity
-      ? ''
-      : 'Add your in-game sensitivity to see exact figures.';
+    $('out-conversion').textContent = settings.sensitivity ? '' : t('setup.addSens');
   }
 
-  hint.textContent = game.verified
-    ? 'Conversion constant verified for this game.'
-    : 'Conversion constant for this game is approximate — treat cm/360 as an estimate.';
+  hint.textContent = game.verified ? t('setup.verifiedHint') : t('setup.unverifiedHint');
   hint.style.color = game.verified ? '' : 'var(--warn)';
 }
 
@@ -97,34 +112,37 @@ function renderHud(engineState, progress) {
   // The multiplier comes from the engine's own state, which the session runner
   // sets before each mode starts.
   const multiplier = engineState.multiplier ?? state.pendingMultiplier ?? '—';
-  $('hud-stage').textContent = mode.charAt(0).toUpperCase() + mode.slice(1);
+  $('hud-stage').textContent = mode === '—' ? '—' : modeLabel(mode);
   $('hud-mult').textContent = typeof multiplier === 'number' ? `${multiplier}×` : '—';
   $('hud-round').textContent = `${Math.min(engineState.roundIndex + 1, engineState.rounds)} / ${engineState.rounds}`;
   const done = Math.min(planTotal, completedRounds + engineState.roundIndex);
   $('hud-progress').textContent = `${done} / ${planTotal}`;
   $('round-bar').style.width = `${planTotal > 0 ? (done / planTotal) * 100 : 0}%`;
   $('stage-status').textContent = engineState.paused
-    ? 'Paused — click the test area to resume.'
-    : 'Click the test area to lock the mouse. Press Esc to release.';
+    ? t('test.status.paused')
+    : t('test.status.click');
   $('canvas-hint').hidden = Boolean(engineState.locked) && !engineState.paused;
 }
 
-async function startTest(plan, label) {
+async function startTest(plan, kind) {
   if (state.running) return;
   const settings = readSettings();
   if (!showErrors(validate(settings))) return;
 
   state.running = true;
   state.settings = settings;
+  state.planKind = kind;
   state.session = null;
   state.rec = null;
   activeController = null;
+
+  const label = planLabel(kind);
 
   $('report').hidden = true;
   $('test-intro').hidden = true;
   $('test-stage').hidden = false;
   $('canvas-hint').hidden = false;
-  $('stage-status').textContent = `${label}: click the test area to lock the mouse.`;
+  $('stage-status').textContent = t('test.status.lock', { label });
 
   try {
     const result = await runPlan($('stage'), plan, {
@@ -133,11 +151,16 @@ async function startTest(plan, label) {
         activeController = c;
       },
       onStep: ({ step, completedRounds, planTotal }) => {
-        $('stage-status').textContent = `${step.mode} at ${step.multiplier}× — ${completedRounds}/${planTotal} rounds done.`;
+        $('stage-status').textContent = t('test.status.running', {
+          mode: modeLabel(step.mode),
+          mult: step.multiplier,
+          done: completedRounds,
+          total: planTotal,
+        });
       },
     });
 
-    state.session = { rounds: result.rounds, aborted: result.aborted, label };
+    state.session = { rounds: result.rounds, aborted: result.aborted, kind };
     if (result.rounds.length > 0) {
       setNavReportVisible(true);
       renderReport();
@@ -145,14 +168,14 @@ async function startTest(plan, label) {
     } else {
       $('test-intro').hidden = false;
       $('test-stage').hidden = true;
-      $('stage-status').textContent = 'No rounds completed.';
+      $('stage-status').textContent = t('test.status.noRounds');
     }
   } catch (err) {
     // A thrown error here would otherwise leave the UI stuck in "testing".
     console.error('AimSense: test failed', err);
     $('test-intro').hidden = false;
     $('test-stage').hidden = true;
-    $('stage-status').textContent = 'Something went wrong running the test. Reload and try again.';
+    $('stage-status').textContent = t('test.status.failed');
   } finally {
     state.running = false;
     activeController = null;
@@ -187,10 +210,13 @@ function renderReport() {
   $('verdict-mult').textContent = `${rec.multiplier}×`;
   $('verdict-sub').textContent =
     Number.isFinite(applied.recommendedSensitivity) && settings.sensitivity > 0
-      ? `Set your in-game sensitivity to ${fmt(applied.recommendedSensitivity, 3)} · ${fmt(applied.recommendedCm360, 2)} cm/360`
+      ? t('report.verdictWithSens', {
+          sens: fmt(applied.recommendedSensitivity, 3),
+          cm: fmt(applied.recommendedCm360, 2),
+        })
       : Number.isFinite(currentCm)
-        ? `${fmt(applied.recommendedCm360, 2)} cm/360`
-        : 'Add your in-game sensitivity in setup for exact figures.';
+        ? t('report.verdictCmOnly', { cm: fmt(applied.recommendedCm360, 2) })
+        : t('report.verdictNoSens');
 
   // comparison
   $('cur-cm').textContent = Number.isFinite(currentCm) ? `${fmt(currentCm, 2)} cm` : '—';
@@ -203,28 +229,36 @@ function renderReport() {
   $('rec-edpi').textContent = Number.isFinite(applied.recommendedEdpi) ? fmt(applied.recommendedEdpi, 0) : '—';
 
   // explanation
-  $('why-head').textContent = rec.explanation.head;
+  $('why-head').textContent = tr(rec.explanation.head);
   $('why-caveat').textContent =
-    rec.explanation.caveat + (game.verified ? '' : ' (Game conversion is approximate.)');
+    tr(rec.explanation.caveat) + (game.verified ? '' : ' ' + t('share.approxNote'));
 
   // charts
   drawCurve($('chart-curve'), { samples: rec.samples, recommended: rec.multiplier, fit: rec.fit });
   drawRadar($('chart-radar'), { modeScores: rec.modeScores });
   drawReaction($('chart-reaction'), { rounds: metrics });
-  drawOvershoot($('chart-overshoot'), { rounds: metrics });
+  drawRadialError($('chart-radial-error'), { rounds: metrics });
   drawOnTarget($('chart-on-target'), { rounds: metrics });
 
-  // table
+  // table — one row per round, with per-mode columns.
+  //
+  // A single shared column set cannot work: track mode has no notion of
+  // accuracy (it accumulates hold time and never increments `misses`, so
+  // hits/hits always read a meaningless 100%), and it records no reaction
+  // time. `summarize` reports NaN for both, and the table renders that as an
+  // em dash rather than inventing a number.
   const tbody = $('round-table').querySelector('tbody');
   tbody.innerHTML = '';
   metrics.forEach((m) => {
     const tr = document.createElement('tr');
     const cells = [
-      m.mode,
+      modeLabel(m.mode),
       `${m.sensitivityMultiplier}×`,
-      m.attempts > 0 ? `${pct(m.accuracy)} (${m.hits}/${m.attempts})` : '—',
+      Number.isFinite(m.accuracy) && m.attempts > 0
+        ? `${pct(m.accuracy)} (${m.hits}/${m.attempts})`
+        : '—',
       Number.isFinite(m.avgReactionMs) ? `${Math.round(m.avgReactionMs)} ms` : '—',
-      Number.isFinite(m.avgOvershootPx) ? `${m.avgOvershootPx.toFixed(1)} px` : '—',
+      m.radialErrorSamples > 0 ? `${m.avgRadialErrorPx.toFixed(1)} px` : '—',
       Number.isFinite(m.onTargetRatio) ? pct(m.onTargetRatio) : '—',
     ];
     cells.forEach((text, i) => {
@@ -246,7 +280,7 @@ function persist() {
     id: makeId(),
     at: new Date().toISOString(),
     settings: { ...state.settings },
-    label: state.session.label,
+    planKind: state.planKind ?? 'full',
     rounds: state.session.rounds,
   };
   const res = saveEntry(entry);
@@ -256,9 +290,7 @@ function persist() {
     const box = $('history-box');
     if (box) box.open = true;
     $('history-list').textContent =
-      res.reason === 'quota'
-        ? 'Could not save: browser storage is full.'
-        : 'Could not save: browser storage is unavailable (private mode?).';
+      res.reason === 'quota' ? t('report.history.quota') : t('report.history.unavailable');
   }
 }
 
@@ -270,7 +302,7 @@ function renderHistory() {
   if (history.length === 0) {
     const p = document.createElement('p');
     p.className = 'muted';
-    p.textContent = 'No saved tests yet.';
+    p.textContent = t('report.history.empty');
     list.appendChild(p);
     return;
   }
@@ -279,11 +311,14 @@ function renderHistory() {
     row.className = 'history-item';
     const left = document.createElement('span');
     const when = new Date(entry.at);
-    left.textContent = `${entry.label ?? 'test'} · ${when.toLocaleDateString()} ${when.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    // The stored entry keeps a `planKind`, not a rendered label, so switching
+    // language re-renders old history rows in the new language too.
+    const label = planLabel(entry.planKind ?? 'full');
+    left.textContent = `${label} · ${when.toLocaleDateString()} ${when.toLocaleTimeString(locale(), { hour: '2-digit', minute: '2-digit' })}`;
     const meta = document.createElement('span');
     meta.className = 'history-item__meta';
     const n = entry.rounds.length;
-    meta.textContent = `${n} rounds · ${entry.settings?.dpi ?? '?'} DPI`;
+    meta.textContent = t('report.history.rounds', { n, dpi: entry.settings?.dpi ?? '?' });
     row.append(left, meta);
     list.appendChild(row);
   });
@@ -294,30 +329,31 @@ function renderHistory() {
 function buildShareText() {
   if (!lastRendered) return '';
   const { settings, game, rec, applied, currentCm, metrics } = lastRendered;
+  const pad = (label) => label.padEnd(13);
   const lines = [
-    'AimSense — sensitivity test result',
+    t('share.title'),
     '──────────────────────────────────',
-    `Game:        ${game.label}`,
-    `DPI:         ${settings.dpi}`,
-    `In-game sens:${settings.sensitivity > 0 ? ' ' + fmt(settings.sensitivity, 3) : ' not provided'}`,
-    `Current:     ${Number.isFinite(currentCm) ? fmt(currentCm, 2) + ' cm/360' : '—'}`,
+    `${pad(t('share.game'))}${gameLabel(settings.game)}`,
+    `${pad(t('share.dpi'))}${settings.dpi}`,
+    `${pad(t('share.sens'))}${settings.sensitivity > 0 ? ' ' + fmt(settings.sensitivity, 3) : ' ' + t('share.notProvided')}`,
+    `${pad(t('share.current'))}${Number.isFinite(currentCm) ? fmt(currentCm, 2) + ' cm/360' : '—'}`,
     '',
-    `RECOMMENDED: ${rec.multiplier}× your current sensitivity`,
+    t('share.recommended', { mult: rec.multiplier }),
     Number.isFinite(applied.recommendedSensitivity)
-      ? `  → set in-game sens to ${fmt(applied.recommendedSensitivity, 3)}`
-      : '  → (in-game sens not provided, apply the multiplier manually)',
+      ? t('share.setSens', { sens: fmt(applied.recommendedSensitivity, 3) })
+      : t('share.applyManually'),
     `  → ${fmt(applied.recommendedCm360, 2)} cm/360`,
-    `Confidence:  ${rec.confidence}`,
+    `${pad(t('share.confidence'))}${rec.confidence}`,
     '',
-    'Scores by sensitivity (0–100):',
+    t('share.scores'),
     ...rec.samples.map(([m, s]) => `  ${m}×  ${(s * 100).toFixed(1)}`),
     '',
-    `Rounds played: ${metrics.length}`,
+    `${t('share.rounds')} ${metrics.length}`,
     '',
-    rec.explanation.head,
-    rec.explanation.caveat,
+    tr(rec.explanation.head),
+    tr(rec.explanation.caveat),
     '',
-    'Tested with AimSense — https://lyimou.github.io/aimsense/',
+    t('share.footer'),
   ];
   return lines.join('\n');
 }
@@ -326,9 +362,12 @@ async function copyResults() {
   const text = buildShareText();
   if (!text) return;
   const btn = $('copy-btn');
+  const reset = () => {
+    btn.textContent = t('report.copy');
+  };
   try {
     await navigator.clipboard.writeText(text);
-    btn.textContent = 'Copied';
+    btn.textContent = t('report.copied');
   } catch {
     // Clipboard API needs a secure context; fall back to a selectable textarea.
     const ta = document.createElement('textarea');
@@ -339,11 +378,9 @@ async function copyResults() {
     ta.select();
     const ok = document.execCommand?.('copy');
     document.body.removeChild(ta);
-    btn.textContent = ok ? 'Copied' : 'Copy failed';
+    btn.textContent = ok ? t('report.copied') : t('report.copyFailed');
   }
-  setTimeout(() => {
-    btn.textContent = 'Copy results';
-  }, 1800);
+  setTimeout(reset, 1800);
 }
 
 function downloadJson() {
@@ -377,7 +414,21 @@ function downloadJson() {
 /* --------------------------------- init --------------------------------- */
 
 function init() {
+  applyI18n();
   $('year').textContent = String(new Date().getFullYear());
+
+  // Language toggle: one button, labelled with the language it switches TO.
+  $('lang-toggle').addEventListener('click', () => {
+    toggleLocale();
+  });
+
+  // Re-render everything that carries text the i18n pass cannot reach: canvas
+  // charts, the metrics table, the readout, and any stored history rows.
+  onLocaleChange(() => {
+    updateReadout();
+    if (lastRendered) renderReport();
+    renderHistory();
+  });
 
   // Setup form wiring
   ['dpi', 'game', 'sens'].forEach((id) => {
@@ -393,8 +444,8 @@ function init() {
     if (s.sensitivity > 0) {
       const values = Object.keys(GAMES)
         .filter((k) => k !== s.game && k !== 'other')
-        .map((k) => `${GAMES[k].label} ${fmt(convertSensitivity(s.game, k, s.dpi, s.sensitivity), 3)}`);
-      $('game-hint').textContent = `Equivalent: ${values.join(' · ')}`;
+        .map((k) => `${gameLabel(k)} ${fmt(convertSensitivity(s.game, k, s.dpi, s.sensitivity), 3)}`);
+      $('game-hint').textContent = t('setup.equivalent', { list: values.join(' · ') });
     }
   });
 
@@ -404,11 +455,11 @@ function init() {
   }
 
   // Test controls
-  $('start-btn').addEventListener('click', () => startTest(fullPlan(), 'Full sweep'));
-  $('quick-btn').addEventListener('click', () => startTest(quickPlan(), 'Quick test'));
+  $('start-btn').addEventListener('click', () => startTest(fullPlan(), 'full'));
+  $('quick-btn').addEventListener('click', () => startTest(quickPlan(), 'quick'));
   $('abort-btn').addEventListener('click', () => {
     if (!activeController) return;
-    if (window.confirm('Abort the test? This round will not be scored.')) {
+    if (window.confirm(t('test.abortConfirm'))) {
       activeController.abort();
     }
   });
@@ -423,7 +474,7 @@ function init() {
     $('setup').scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
   $('clear-history').addEventListener('click', () => {
-    if (window.confirm('Delete all saved tests on this device?')) {
+    if (window.confirm(t('report.history.clearConfirm'))) {
       clearHistory();
       renderHistory();
     }
@@ -454,8 +505,9 @@ function init() {
     totalRounds,
     renderReport,
     /** Inject a finished session (used by tests and screenshot capture). */
-    setSession(rounds, settings, label = 'Full sweep') {
-      state.session = { rounds, aborted: false, label };
+    setSession(rounds, settings, kind = 'full') {
+      state.session = { rounds, aborted: false, kind };
+      state.planKind = kind;
       if (settings) state.settings = settings;
       renderReport();
     },
