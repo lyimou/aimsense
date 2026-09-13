@@ -38,10 +38,20 @@ jobs:
           # build step and no third-party code. Playwright is a dev-only tool for
           # the browser tests, so only `dependencies` and the shipped imports are
           # checked here — not node_modules.
-          if grep -q '"dependencies"' package.json; then
-            echo "::error::package.json declares runtime dependencies"
-            exit 1
-          fi
+          #
+          # Parsed rather than grepped: `grep '"dependencies"'` also matches
+          # `"devDependencies"`, so it reported a failure on a package with no
+          # runtime dependencies at all. A false failure is worse than no check,
+          # because it trains you to ignore the step.
+          node -e "
+            const pkg = require('./package.json');
+            const deps = Object.keys(pkg.dependencies ?? {});
+            if (deps.length) {
+              console.error('::error::package.json declares runtime dependencies: ' + deps.join(', '));
+              process.exit(1);
+            }
+            console.log('no runtime dependencies declared');
+          "
 
           # Nothing under src/ may import a bare specifier (i.e. a package).
           # Relative imports only.
