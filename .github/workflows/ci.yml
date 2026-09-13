@@ -34,24 +34,12 @@ jobs:
 
       - name: Verify the site itself has no runtime dependencies
         run: |
-          # The whole point of this project is that the SHIPPED site needs no
-          # build step and no third-party code. Playwright is a dev-only tool for
-          # the browser tests, so only `dependencies` and the shipped imports are
-          # checked here — not node_modules.
-          #
-          # Parsed rather than grepped: `grep '"dependencies"'` also matches
-          # `"devDependencies"`, so it reported a failure on a package with no
-          # runtime dependencies at all. A false failure is worse than no check,
-          # because it trains you to ignore the step.
-          node -e "
-            const pkg = require('./package.json');
-            const deps = Object.keys(pkg.dependencies ?? {});
-            if (deps.length) {
-              console.error('::error::package.json declares runtime dependencies: ' + deps.join(', '));
-              process.exit(1);
-            }
-            console.log('no runtime dependencies declared');
-          "
+          # Delegated to a script so it never depends on shell/YAML quoting.
+          # The previous inline version embedded JS in a double-quoted shell
+          # string and failed on both Node versions for that reason alone.
+          # The script also asserts that every src/js import is relative, so the
+          # grep below is a second opinion rather than the only check.
+          node scripts/check-no-runtime-deps.mjs
 
           # Nothing under src/ may import a bare specifier (i.e. a package).
           # Relative imports only.
