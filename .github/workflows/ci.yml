@@ -74,6 +74,14 @@ jobs:
           fi
           echo "asset paths are relative"
 
+      - name: Verify the deploy output is complete
+        run: |
+          # Catches the failure mode where the page references a file that was
+          # never staged: a 404 in production and a blank screen. Run here, on
+          # every push and PR, rather than only discovering it at deploy time.
+          node scripts/stage-deploy.mjs
+          rm -rf _site
+
   deploy:
     name: Deploy to GitHub Pages
     needs: test
@@ -91,12 +99,22 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
       - uses: actions/configure-pages@v5
+
+      # Stage an explicit allowlist of published files. Uploading `path: .`
+      # would publish the whole repository, including internal CI config,
+      # the test harness and ~1 MB of dev screenshots.
+      - name: Stage the deploy output
+        run: node scripts/stage-deploy.mjs
 
       - uses: actions/upload-pages-artifact@v3
         with:
-          # The repository root IS the site: no build step.
-          path: .
+          # Only the staged allowlist, never the repository root.
+          path: _site
 
       - id: deployment
         uses: actions/deploy-pages@v4

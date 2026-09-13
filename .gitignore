@@ -1,6 +1,12 @@
 # Build output
 dist/
 build/
+_site/
+
+# Verification artifacts (written by scripts/verify-*.mjs)
+verify-report.json
+test-results/
+playwright-report/
 
 # Dependencies (there are none, but be explicit)
 node_modules/
