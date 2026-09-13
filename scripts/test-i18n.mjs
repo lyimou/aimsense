@@ -160,6 +160,33 @@ console.log('\ni18n integrity\n' + '='.repeat(60));
   setLocale('en');
 }
 
+/* ── 7. works with no browser globals at all ------------------------------- */
+{
+  /*
+   * `i18n.js` is imported by engine.js, which is imported by the metric tests,
+   * so a ReferenceError at its module load takes down far more than the UI.
+   * Node 20 has no global `navigator` (added in v21) and no `location`, and CI
+   * runs Node 20 — so this guard exists because that combination already broke
+   * the build once, invisible on a newer local Node.
+   */
+  const before = { nav: globalThis.navigator, loc: globalThis.location };
+  try {
+    delete globalThis.navigator;
+    delete globalThis.location;
+    const fresh = await import(`../src/js/i18n.js?noglobals=${Date.now()}`);
+    ok('module loads with no navigator/location (Node 20 compatibility)',
+      typeof fresh.t === 'function');
+    ok('falls back to the default locale', fresh.locale() === 'en', fresh.locale());
+    ok('still translates', fresh.t('nav.setup') === 'Setup', fresh.t('nav.setup'));
+    ok('setLocale is safe without a DOM', (() => {
+      try { fresh.setLocale('zh'); return true; } catch { return false; }
+    })());
+  } finally {
+    if (before.nav) Object.defineProperty(globalThis, 'navigator', { value: before.nav, configurable: true, writable: true });
+    if (before.loc) globalThis.location = before.loc;
+  }
+}
+
 console.log('='.repeat(60));
 console.log(`${pass} passed, ${fail} failed\n`);
 process.exit(fail === 0 ? 0 : 1);

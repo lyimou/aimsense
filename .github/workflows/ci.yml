@@ -11,14 +11,23 @@ permissions:
 
 jobs:
   test:
-    name: Unit tests
+    name: Unit tests (Node ${{ matrix.node }})
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # Both versions, deliberately. `i18n.js` read a global `navigator` at
+        # module load, which does not exist on Node 20 (it arrived in Node 21).
+        # That crashed every module importing it — including the engine — and
+        # was invisible locally on Node 24. Cheap insurance against the same
+        # class of runtime-specific break.
+        node: ['20', '22']
     steps:
       - uses: actions/checkout@v4
 
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: ${{ matrix.node }}
 
       - name: Run tests
         run: npm test

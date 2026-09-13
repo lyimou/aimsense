@@ -38,6 +38,9 @@ function writeStored(locale) {
 }
 
 function fromUrl() {
+  // `location` does not exist outside a browser and did not exist in Node
+  // until v21 either, so this cannot assume it.
+  if (typeof location === 'undefined') return null;
   try {
     const v = new URLSearchParams(location.search).get('lang');
     if (!v) return null;
@@ -53,6 +56,13 @@ function fromUrl() {
 }
 
 function fromBrowser() {
+  /*
+   * `navigator` is NOT guaranteed here. Node 20 has no global navigator at all
+   * (it was added in v21), so reading it unguarded threw a ReferenceError at
+   * module load — which took down every module that imports this one, including
+   * the engine. CI ran Node 20 and the engine's tests died on import.
+   */
+  if (typeof navigator === 'undefined') return null;
   const list = navigator.languages?.length ? navigator.languages : [navigator.language];
   for (const tag of list) {
     if (!tag) continue;
